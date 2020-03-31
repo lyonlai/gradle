@@ -34,7 +34,7 @@ internal
 class InstantExecutionCacheFingerprintChecker(private val host: Host) {
 
     interface Host {
-        fun fingerprintOf(fileCollection: FileCollectionInternal): CurrentFileCollectionFingerprint
+        fun fingerprintOf(fileCollection: FileCollectionInternal): HashCode
         fun hashCodeOf(file: File): HashCode?
         fun displayNameOf(fileOrDirectory: File): String
         fun instantiateValueSourceOf(obtainedValue: ObtainedValue): ValueSource<Any, ValueSourceParameters>
@@ -47,7 +47,7 @@ class InstantExecutionCacheFingerprintChecker(private val host: Host) {
                 null -> return null
                 is InstantExecutionCacheFingerprint.TaskInputs -> input.run {
                     val currentFingerprint = host.fingerprintOf(fileSystemInputs)
-                    if (currentFingerprint.hash != fileSystemInputsFingerprint.hash) {
+                    if (currentFingerprint != fileSystemInputsFingerprint) {
                         // TODO: summarize what has changed (see https://github.com/gradle/instant-execution/issues/282)
                         return "an input to task '$taskPath' has changed"
                     }

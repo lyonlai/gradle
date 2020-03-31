@@ -30,7 +30,7 @@ sealed class InstantExecutionCacheFingerprint {
     data class TaskInputs(
         val taskPath: String,
         val fileSystemInputs: FileCollectionInternal,
-        val fileSystemInputsFingerprint: CurrentFileCollectionFingerprint
+        val fileSystemInputsFingerprint: HashCode
     ) : InstantExecutionCacheFingerprint()
 
     data class InputFile(

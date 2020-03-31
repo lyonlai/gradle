@@ -46,7 +46,7 @@ class InstantExecutionCacheFingerprintWriter(
         fun fingerprintOf(
             fileCollection: FileCollectionInternal,
             owner: TaskInternal
-        ): CurrentFileCollectionFingerprint
+        ): HashCode
     }
 
     /**
