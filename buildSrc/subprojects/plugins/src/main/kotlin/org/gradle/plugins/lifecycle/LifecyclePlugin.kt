@@ -19,6 +19,7 @@ package org.gradle.plugins.lifecycle
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.tasks.TaskContainer
+import org.gradle.kotlin.dsl.*
 
 
 /**
@@ -27,19 +28,78 @@ import org.gradle.api.tasks.TaskContainer
 class LifecyclePlugin : Plugin<Project> {
 
     private
+    val compileAllBuild = "compileAllBuild"
+    private
+    val platformTest = "platformTest"
+    private
+    val allVersionsIntegMultiVersionTest = "allVersionsIntegMultiVersionTest"
+    private
+    val quickFeedbackCrossVersionTest = "quickFeedbackCrossVersionTest"
+    private
+    val allVersionsCrossVersionTest = "allVersionsCrossVersionTest"
+    private
+    val soakTest = "soakTest"
+    private
+    val noDaemonTest = "noDaemonTest"
+
+    private
     val ciGroup = "CI Lifecycle"
 
     override fun apply(project: Project): Unit = project.run {
-        tasks.registerEarlyFeedbackLifecycleTasks()
-        tasks.registerCITestDistributionLifecycleTasks()
+        setupGlobalState()
+
+        subprojects {
+            plugins.withId("gradlebuild.java-projects") {
+                tasks.registerEarlyFeedbackLifecycleTasks()
+            }
+            plugins.withId("gradlebuild.integration-tests") {
+                tasks.registerCIIntegrationTestDistributionLifecycleTasks()
+            }
+            plugins.withId("gradlebuild.cross-version-tests") {
+                tasks.registerCICrossVersionTestDistributionLifecycleTasks()
+            }
+        }
     }
+
+    private
+    fun Project.setupGlobalState(): Unit = project.run {
+        if (needsToIgnoreIncomingBuildReceipt()) {
+            globalProperty("ignoreIncomingBuildReceipt" to true)
+        }
+        if (needsToUseTestVersionsPartial()) {
+            globalProperty("testVersions" to "partial")
+        }
+        if (needsToUseTestVersionsAll()) {
+            globalProperty("testVersions" to "all")
+        }
+        if (needsToUseAllDistribution()) {
+            globalProperty("useAllDistribution" to true)
+        }
+    }
+
+    private
+    fun Project.needsToIgnoreIncomingBuildReceipt() = isRequestedTask(compileAllBuild)
+
+    private
+    fun Project.needsToUseTestVersionsPartial() = isRequestedTask(platformTest)
+
+    private
+    fun Project.needsToUseTestVersionsAll() = isRequestedTask(allVersionsCrossVersionTest)
+        || isRequestedTask(allVersionsIntegMultiVersionTest)
+        || isRequestedTask(soakTest)
+
+    private
+    fun Project.needsToUseAllDistribution() = isRequestedTask(quickFeedbackCrossVersionTest)
+        || isRequestedTask(allVersionsCrossVersionTest)
+        || isRequestedTask(allVersionsIntegMultiVersionTest)
+        || isRequestedTask(noDaemonTest)
 
     /**
      * Basic compile and check lifecycle tasks.
      */
     private
     fun TaskContainer.registerEarlyFeedbackLifecycleTasks() {
-        register("compileAllBuild") {
+        register(compileAllBuild) {
             description = "Initialize CI Pipeline by priming the cache before fanning out"
             group = ciGroup
             dependsOn(":createBuildReceipt", "compileAll")
@@ -56,35 +116,23 @@ class LifecyclePlugin : Plugin<Project> {
     }
 
     /**
-     * Test lifecycle tasks that correspond to CIBuildModel.TestType (see .teamcity/Gradle_Check/model/CIBuildModel.kt).
+     * Integration test lifecycle tasks that correspond to CIBuildModel.TestType (see .teamcity/Gradle_Check/model/CIBuildModel.kt).
      */
     private
-    fun TaskContainer.registerCITestDistributionLifecycleTasks() {
+    fun TaskContainer.registerCIIntegrationTestDistributionLifecycleTasks() {
         register("quickTest") {
             description = "Run all unit, integration and cross-version (against latest release) tests in embedded execution mode"
             group = ciGroup
             dependsOn("test", "integTest", "crossVersionTest")
         }
 
-        register("platformTest") {
+        register(platformTest) {
             description = "Run all unit, integration and cross-version (against latest release) tests in forking execution mode"
             group = ciGroup
             dependsOn("test", "forkingIntegTest", "forkingCrossVersionTest")
         }
 
-        register("quickFeedbackCrossVersionTest") {
-            description = "Run cross-version tests against a limited set of versions"
-            group = ciGroup
-            dependsOn("quickFeedbackCrossVersionTests")
-        }
-
-        register("allVersionsCrossVersionTest") {
-            description = "Run cross-version tests against all released versions (latest patch release of each)"
-            group = ciGroup
-            dependsOn("allVersionsCrossVersionTests")
-        }
-
-        register("allVersionsIntegMultiVersionTest") {
+        register(allVersionsIntegMultiVersionTest) {
             description = "Run all multi-version integration tests with all version to cover"
             group = ciGroup
             dependsOn("integMultiVersionTest")
@@ -96,7 +144,7 @@ class LifecyclePlugin : Plugin<Project> {
             dependsOn("parallelIntegTest")
         }
 
-        register("noDaemonTest") {
+        register(noDaemonTest) {
             description = "Run all integration tests in no-daemon execution mode: each Gradle execution started in a test forks a new daemon"
             group = ciGroup
             dependsOn("noDaemonIntegTest")
@@ -114,7 +162,7 @@ class LifecyclePlugin : Plugin<Project> {
             dependsOn("vfsRetentionIntegTest")
         }
 
-        register("soakTest") {
+        register(soakTest) {
             description = "Run all soak tests defined in the :soak subproject"
             group = ciGroup
             dependsOn(":soak:soakIntegTest")
@@ -126,4 +174,38 @@ class LifecyclePlugin : Plugin<Project> {
             dependsOn("integForceRealizeTest")
         }
     }
+
+    /**
+     * Cross-version test lifecycle tasks that correspond to CIBuildModel.TestType (see .teamcity/Gradle_Check/model/CIBuildModel.kt).
+     */
+    private
+    fun TaskContainer.registerCICrossVersionTestDistributionLifecycleTasks() {
+        register(quickFeedbackCrossVersionTest) {
+            description = "Run cross-version tests against a limited set of versions"
+            group = ciGroup
+            dependsOn("quickFeedbackCrossVersionTests")
+        }
+
+        register(allVersionsCrossVersionTest) {
+            description = "Run cross-version tests against all released versions (latest patch release of each)"
+            group = ciGroup
+            dependsOn("allVersionsCrossVersionTests")
+        }
+    }
+
+    private
+    fun Project.globalProperty(pair: Pair<String, Any>) {
+        val propertyName = pair.first
+        val value = pair.second
+        if (hasProperty(propertyName)) {
+            val otherValue = property(propertyName)
+            if (value.toString() != otherValue.toString()) {
+                throw RuntimeException("Attempting to set global property $propertyName to two different values ($value vs $otherValue)")
+            }
+        }
+        extra.set(propertyName, value)
+    }
+
+    private
+    fun Project.isRequestedTask(taskName: String) = gradle.startParameter.taskNames.contains(taskName)
 }
