@@ -19,10 +19,13 @@ package org.gradle.plugins.ide.eclipse.model;
 import com.google.common.base.Preconditions;
 import groovy.lang.Closure;
 import org.gradle.api.Action;
+import org.gradle.api.Incubating;
 import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.internal.project.ProjectInternal;
 import org.gradle.api.internal.project.ProjectStateRegistry;
+import org.gradle.api.jpms.ModularClasspathHandling;
 import org.gradle.api.tasks.SourceSet;
+import org.gradle.internal.jpms.DefaultModularClasspathHandling;
 import org.gradle.internal.xml.XmlTransformer;
 import org.gradle.plugins.ide.api.XmlFileContentMerger;
 import org.gradle.plugins.ide.eclipse.model.internal.ClasspathFactory;
@@ -145,9 +148,12 @@ public class EclipseClasspath {
 
     private final org.gradle.api.Project project;
 
+    private final ModularClasspathHandling modularClasspathHandling;
+
     @Inject
     public EclipseClasspath(org.gradle.api.Project project) {
         this.project = project;
+        this.modularClasspathHandling = project.getObjects().newInstance(DefaultModularClasspathHandling.class);
     }
 
     /**
@@ -187,6 +193,16 @@ public class EclipseClasspath {
 
     public void setMinusConfigurations(Collection<Configuration> minusConfigurations) {
         this.minusConfigurations = minusConfigurations;
+    }
+
+    /**
+     * The module path handling.
+     *
+     * @since 6.4
+     */
+    @Incubating
+    public ModularClasspathHandling getModularClasspathHandling() {
+        return modularClasspathHandling;
     }
 
     /**
@@ -323,7 +339,7 @@ public class EclipseClasspath {
         ProjectInternal projectInternal = (ProjectInternal) this.project;
         IdeArtifactRegistry ideArtifactRegistry = projectInternal.getServices().get(IdeArtifactRegistry.class);
         ProjectStateRegistry projectRegistry = projectInternal.getServices().get(ProjectStateRegistry.class);
-        ClasspathFactory classpathFactory = new ClasspathFactory(this, ideArtifactRegistry, projectRegistry, new DefaultGradleApiSourcesResolver(project));
+        ClasspathFactory classpathFactory = new ClasspathFactory(this, ideArtifactRegistry, projectRegistry, new DefaultGradleApiSourcesResolver(project), modularClasspathHandling.getInferModulePath().get());
         return classpathFactory.createEntries();
     }
 
